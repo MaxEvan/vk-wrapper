@@ -10,20 +10,20 @@ import { FuseV1Options, FuseVersion } from '@electron/fuses';
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
-    name: 'Vibe Kanban',
-    executableName: 'vibe-kanban',
-    appBundleId: 'com.vibekanban.desktop',
+    name: 'VK Wrapper',
+    executableName: 'vk-wrapper',
+    appBundleId: 'com.vkwrapper.desktop',
   },
   rebuildConfig: {},
   makers: [
     new MakerSquirrel({
-      name: 'VibeKanban',
+      name: 'VKWrapper',
     }),
     new MakerZIP({}, ['darwin']),
     new MakerRpm({}),
     new MakerDeb({
       options: {
-        maintainer: 'Vibe Kanban',
+        maintainer: 'VK Wrapper',
         homepage: 'https://vibekanban.com',
       },
     }),

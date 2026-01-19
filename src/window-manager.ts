@@ -14,7 +14,7 @@ export class WindowManager {
       height: 900,
       minWidth: 800,
       minHeight: 600,
-      title: 'Vibe Kanban',
+      title: 'VK Wrapper',
       show: false,
       webPreferences: {
         preload: path.join(__dirname, 'preload.js'),
@@ -60,7 +60,7 @@ export class WindowManager {
         <html>
         <head>
           <meta charset="UTF-8">
-          <title>Vibe Kanban - Error</title>
+          <title>VK Wrapper - Error</title>
           <style>
             body {
               font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;

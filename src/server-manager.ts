@@ -48,10 +48,11 @@ export class ServerManager {
 
       let stderrOutput = '';
 
-      // Spawn npx without shell: true to avoid deprecation warning
-      // Use the full path to npx and pass args as array
+      // Spawn npx with detached: false to keep it in our process group
+      // This ensures child processes are killed when we kill the parent
       this.serverProcess = spawn(npxPath, ['vibe-kanban@latest'], {
         stdio: ['ignore', 'pipe', 'pipe'],
+        detached: false,
         env: {
           ...process.env,
           // Disable auto-opening browser since we're handling that
@@ -118,6 +119,45 @@ export class ServerManager {
     });
   }
 
+  private killProcessTree(pid: number): void {
+    if (process.platform === 'win32') {
+      // Windows: use taskkill with /T to kill process tree
+      try {
+        execSync(`taskkill /pid ${pid} /T /F`, { stdio: 'pipe' });
+      } catch {
+        // Process may already be dead
+      }
+    } else {
+      // macOS/Linux: kill the process group
+      // First try to find and kill child processes
+      try {
+        // Find all child processes using pgrep
+        const children = execSync(`pgrep -P ${pid}`, { stdio: 'pipe', encoding: 'utf-8' })
+          .trim()
+          .split('\n')
+          .filter(Boolean);
+
+        // Kill children first
+        for (const childPid of children) {
+          try {
+            process.kill(parseInt(childPid, 10), 'SIGTERM');
+          } catch {
+            // Child may already be dead
+          }
+        }
+      } catch {
+        // No children or pgrep failed
+      }
+
+      // Also try pkill to kill any vibe-kanban processes we spawned
+      try {
+        execSync('pkill -f "vibe-kanban"', { stdio: 'pipe' });
+      } catch {
+        // No matching processes
+      }
+    }
+  }
+
   async killServer(): Promise<void> {
     return new Promise((resolve) => {
       if (!this.serverProcess || this.serverProcess.killed) {
@@ -127,41 +167,34 @@ export class ServerManager {
         return;
       }
 
+      const pid = this.serverProcess.pid;
+
       const forceKillTimeout = setTimeout(() => {
         // Force kill if graceful shutdown fails
-        if (this.serverProcess && !this.serverProcess.killed) {
-          console.log('Force killing server process');
-          if (process.platform === 'win32') {
-            try {
-              execSync(`taskkill /pid ${this.serverProcess.pid} /f /t`, { stdio: 'pipe' });
-            } catch {
-              // Process may already be dead
-            }
-          } else {
-            this.serverProcess.kill('SIGKILL');
-          }
+        console.log('Force killing server process tree');
+        if (pid) {
+          this.killProcessTree(pid);
         }
         this.serverProcess = null;
         this.serverUrl = null;
         resolve();
-      }, 5000); // 5 second grace period
+      }, 3000); // 3 second grace period
 
       this.serverProcess.once('exit', () => {
         clearTimeout(forceKillTimeout);
+        // Also clean up any orphaned children
+        if (pid) {
+          this.killProcessTree(pid);
+        }
         this.serverProcess = null;
         this.serverUrl = null;
         resolve();
       });
 
-      // Send graceful shutdown signal
-      if (process.platform === 'win32') {
-        try {
-          execSync(`taskkill /pid ${this.serverProcess.pid} /t`, { stdio: 'pipe' });
-        } catch {
-          // Process may already be dead
-        }
-      } else {
-        this.serverProcess.kill('SIGTERM');
+      // Send graceful shutdown signal to the process tree
+      if (pid) {
+        console.log('Sending SIGTERM to server process tree...');
+        this.killProcessTree(pid);
       }
     });
   }
