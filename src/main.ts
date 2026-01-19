@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, ipcMain } from 'electron';
 import started from 'electron-squirrel-startup';
 import { ServerManager } from './server-manager';
 import { WindowManager } from './window-manager';
@@ -16,13 +16,22 @@ class VibeKanbanApp {
   async initialize(): Promise<void> {
     await app.whenReady();
 
-    // Create window with loading screen
+    // Create window with config screen
     this.windowManager.createMainWindow();
 
+    // Setup IPC handler for launch-server
+    ipcMain.handle('launch-server', async (_event, port?: number) => {
+      await this.launchServer(port);
+    });
+
+    this.setupEventHandlers();
+  }
+
+  private async launchServer(port?: number): Promise<void> {
     try {
       // Start the vibe-kanban server
-      console.log('Starting vibe-kanban server...');
-      const serverUrl = await this.serverManager.startServer();
+      console.log('Starting vibe-kanban server...', port ? `on port ${port}` : '(auto port)');
+      const serverUrl = await this.serverManager.startServer(port);
       console.log('Server ready at:', serverUrl);
 
       // Load the server URL in the window
@@ -33,8 +42,6 @@ class VibeKanbanApp {
         error instanceof Error ? error.message : 'Unknown error'
       );
     }
-
-    this.setupEventHandlers();
   }
 
   private setupEventHandlers(): void {

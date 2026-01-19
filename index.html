@@ -24,6 +24,9 @@
 
       .container {
         text-align: center;
+        max-width: 400px;
+        width: 100%;
+        padding: 20px;
       }
 
       h1 {
@@ -34,6 +37,91 @@
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
+      }
+
+      /* Config screen styles */
+      .config-screen {
+        display: block;
+      }
+
+      .config-screen.hidden {
+        display: none;
+      }
+
+      .form-group {
+        margin-bottom: 20px;
+        text-align: left;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 8px;
+        color: #aaa;
+        font-size: 14px;
+      }
+
+      input[type="number"] {
+        width: 100%;
+        padding: 12px 16px;
+        font-size: 16px;
+        border: 2px solid rgba(102, 126, 234, 0.3);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.05);
+        color: #fff;
+        outline: none;
+        transition: border-color 0.2s;
+      }
+
+      input[type="number"]:focus {
+        border-color: #667eea;
+      }
+
+      input[type="number"]::placeholder {
+        color: #666;
+      }
+
+      .hint {
+        font-size: 12px;
+        color: #666;
+        margin-top: 6px;
+      }
+
+      button {
+        width: 100%;
+        padding: 14px 24px;
+        font-size: 16px;
+        font-weight: 600;
+        border: none;
+        border-radius: 8px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        cursor: pointer;
+        transition: transform 0.2s, box-shadow 0.2s;
+      }
+
+      button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 20px rgba(102, 126, 234, 0.4);
+      }
+
+      button:active {
+        transform: translateY(0);
+      }
+
+      button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+      }
+
+      /* Loading screen styles */
+      .loading-screen {
+        display: none;
+      }
+
+      .loading-screen.visible {
+        display: block;
       }
 
       .spinner {
@@ -61,8 +149,29 @@
   <body>
     <div class="container">
       <h1>VK Wrapper</h1>
-      <div class="spinner"></div>
-      <p class="status">Starting server...</p>
+
+      <!-- Config Screen -->
+      <div id="config-screen" class="config-screen">
+        <div class="form-group">
+          <label for="port">Port</label>
+          <input
+            type="number"
+            id="port"
+            min="1024"
+            max="65535"
+            placeholder="9990"
+            value=""
+          />
+          <p class="hint">Leave empty for automatic port selection</p>
+        </div>
+        <button id="launch-btn" type="button">Launch Vibe Kanban</button>
+      </div>
+
+      <!-- Loading Screen -->
+      <div id="loading-screen" class="loading-screen">
+        <div class="spinner"></div>
+        <p class="status">Starting server...</p>
+      </div>
     </div>
     <script type="module" src="/src/renderer.ts"></script>
   </body>

@@ -30,7 +30,7 @@ export class ServerManager {
     }
   }
 
-  async startServer(): Promise<string> {
+  async startServer(port?: number): Promise<string> {
     return new Promise((resolve, reject) => {
       // Get npx path first (also validates Node.js is available)
       let npxPath: string;
@@ -48,16 +48,23 @@ export class ServerManager {
 
       let stderrOutput = '';
 
+      // Build environment with optional PORT
+      const env: NodeJS.ProcessEnv = {
+        ...process.env,
+        // Disable auto-opening browser since we're handling that
+        BROWSER: 'none',
+      };
+
+      if (port) {
+        env.PORT = String(port);
+      }
+
       // Spawn npx with detached: false to keep it in our process group
       // This ensures child processes are killed when we kill the parent
       this.serverProcess = spawn(npxPath, ['vibe-kanban@latest'], {
         stdio: ['ignore', 'pipe', 'pipe'],
         detached: false,
-        env: {
-          ...process.env,
-          // Disable auto-opening browser since we're handling that
-          BROWSER: 'none',
-        },
+        env,
       });
 
       this.serverProcess.stdout?.on('data', (data: Buffer) => {
