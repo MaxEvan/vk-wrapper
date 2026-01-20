@@ -1,7 +1,7 @@
 {
   "name": "vk-wrapper",
   "productName": "VK Wrapper",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "Desktop application for Vibe Kanban - AI agent orchestration tool",
   "main": ".vite/build/main.js",
   "private": true,
