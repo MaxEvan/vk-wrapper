@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
+import path from 'path';
 import started from 'electron-squirrel-startup';
 import { ServerManager } from './server-manager';
 import { WindowManager } from './window-manager';
@@ -15,6 +16,12 @@ class VibeKanbanApp {
 
   async initialize(): Promise<void> {
     await app.whenReady();
+
+    // Set dock icon on macOS
+    if (process.platform === 'darwin' && app.dock) {
+      const iconPath = path.join(app.getAppPath(), 'assets', 'icon.png');
+      app.dock.setIcon(iconPath);
+    }
 
     // Create window with config screen
     this.windowManager.createMainWindow();

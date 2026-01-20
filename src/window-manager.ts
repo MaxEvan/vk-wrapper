@@ -1,4 +1,4 @@
-import { BrowserWindow, shell } from 'electron';
+import { BrowserWindow, shell, app } from 'electron';
 import path from 'path';
 
 // Vite injects these constants
@@ -9,12 +9,16 @@ export class WindowManager {
   private mainWindow: BrowserWindow | null = null;
 
   createMainWindow(): BrowserWindow {
+    // Get icon path - works in both dev and production
+    const iconPath = path.join(app.getAppPath(), 'assets', 'icon.png');
+
     this.mainWindow = new BrowserWindow({
       width: 1400,
       height: 900,
       minWidth: 800,
       minHeight: 600,
       title: 'VK Wrapper',
+      icon: iconPath,
       show: false,
       webPreferences: {
         preload: path.join(__dirname, 'preload.js'),

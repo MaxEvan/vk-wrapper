@@ -6,6 +6,7 @@ import { MakerRpm } from '@electron-forge/maker-rpm';
 import { VitePlugin } from '@electron-forge/plugin-vite';
 import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
+import { PublisherGithub } from '@electron-forge/publisher-github';
 
 const config: ForgeConfig = {
   packagerConfig: {
@@ -13,18 +14,24 @@ const config: ForgeConfig = {
     name: 'VK Wrapper',
     executableName: 'vk-wrapper',
     appBundleId: 'com.vkwrapper.desktop',
+    icon: './assets/icon',
   },
   rebuildConfig: {},
   makers: [
     new MakerSquirrel({
       name: 'VKWrapper',
+      setupIcon: './assets/icon.ico',
     }),
     new MakerZIP({}, ['darwin']),
-    new MakerRpm({}),
+    new MakerRpm({
+      options: {
+        icon: './assets/icon.png',
+      },
+    }),
     new MakerDeb({
       options: {
-        maintainer: 'VK Wrapper',
-        homepage: 'https://vibekanban.com',
+        maintainer: 'Max Evan',
+        icon: './assets/icon.png',
       },
     }),
   ],
@@ -62,6 +69,16 @@ const config: ForgeConfig = {
       [FuseV1Options.EnableNodeCliInspectArguments]: false,
       [FuseV1Options.EnableEmbeddedAsarIntegrityValidation]: true,
       [FuseV1Options.OnlyLoadAppFromAsar]: true,
+    }),
+  ],
+  publishers: [
+    new PublisherGithub({
+      repository: {
+        owner: 'MaxEvan',
+        name: 'vk-wrapper',
+      },
+      prerelease: false,
+      draft: true,
     }),
   ],
 };
