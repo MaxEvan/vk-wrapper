@@ -1,10 +1,19 @@
 import { spawn, ChildProcess, execSync } from 'child_process';
+import path from 'path';
+import os from 'os';
+import fs from 'fs';
+import { ConfigManager } from './config-manager';
 
 export class ServerManager {
   private serverProcess: ChildProcess | null = null;
   private serverUrl: string | null = null;
+  private configManager: ConfigManager;
   private readonly URL_REGEX = /https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0):\d+/;
   private readonly STARTUP_TIMEOUT = 60000; // 60 seconds (first run may need to download)
+
+  constructor(configManager: ConfigManager) {
+    this.configManager = configManager;
+  }
 
   isRunning(): boolean {
     return this.serverProcess !== null && !this.serverProcess.killed;
@@ -14,28 +23,101 @@ export class ServerManager {
     return this.serverUrl;
   }
 
-  private getNpxPath(): string {
-    // Find npx in PATH
-    try {
-      if (process.platform === 'win32') {
-        return execSync('where npx', { stdio: 'pipe', encoding: 'utf-8' }).trim().split('\n')[0];
-      } else {
-        return execSync('which npx', { stdio: 'pipe', encoding: 'utf-8' }).trim();
-      }
-    } catch {
-      throw new Error(
-        'Node.js/npx is not installed or not in PATH.\n\n' +
-        'Please install Node.js 18+ from https://nodejs.org'
-      );
+  private getShellCommand(): { shell: string; args: string[] } {
+    if (process.platform === 'win32') {
+      return {
+        shell: 'cmd.exe',
+        args: ['/c'],
+      };
+    } else {
+      // macOS and Linux - use bash as it's more universal than zsh
+      return {
+        shell: '/bin/bash',
+        args: ['-l', '-c'],
+      };
     }
+  }
+
+  /**
+   * Resolve a proto shim path to the actual binary path.
+   * Proto shims are wrappers that need the proto runtime, but we can
+   * find the actual binaries in ~/.proto/tools/<tool>/<version>/bin/
+   */
+  private resolveProtoShim(shimPath: string, binaryName: string): string {
+    if (!shimPath.includes('.proto/shims')) {
+      return shimPath;
+    }
+
+    const homeDir = os.homedir();
+    // npx comes bundled with node, so look in the node tool directory
+    const toolName = binaryName === 'npx' ? 'node' : binaryName;
+    const protoToolsDir = path.join(homeDir, '.proto', 'tools', toolName);
+
+    // Check if the tools directory exists
+    if (!fs.existsSync(protoToolsDir)) {
+      console.log(`Proto tools directory not found: ${protoToolsDir}`);
+      return shimPath;
+    }
+
+    // List installed versions and find the latest
+    const versions = fs.readdirSync(protoToolsDir).filter(dir => {
+      const fullPath = path.join(protoToolsDir, dir);
+      return fs.statSync(fullPath).isDirectory() && /^\d+\.\d+/.test(dir);
+    });
+
+    if (versions.length === 0) {
+      console.log(`No ${toolName} versions found in proto tools`);
+      return shimPath;
+    }
+
+    // Sort versions descending (highest first)
+    versions.sort((a, b) => {
+      const partsA = a.split('.').map(n => parseInt(n, 10) || 0);
+      const partsB = b.split('.').map(n => parseInt(n, 10) || 0);
+      for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
+        const diff = (partsB[i] || 0) - (partsA[i] || 0);
+        if (diff !== 0) return diff;
+      }
+      return 0;
+    });
+
+    const latestVersion = versions[0];
+    const actualBinaryPath = path.join(protoToolsDir, latestVersion, 'bin', binaryName);
+
+    if (fs.existsSync(actualBinaryPath)) {
+      console.log(`Resolved proto shim ${shimPath} to ${actualBinaryPath}`);
+      return actualBinaryPath;
+    }
+
+    console.log(`Actual binary not found at: ${actualBinaryPath}`);
+    return shimPath;
+  }
+
+  private getPaths(): { nodePath: string; npxPath: string } {
+    let nodePath = this.configManager.getNodePath();
+    let npxPath = this.configManager.getNpxPath();
+
+    if (!nodePath || !npxPath) {
+      throw new Error('PATHS_NOT_CONFIGURED');
+    }
+
+    // Resolve proto shims to actual binaries
+    // Both node and npx are in the 'node' tool directory since npx comes with node
+    nodePath = this.resolveProtoShim(nodePath, 'node');
+    npxPath = this.resolveProtoShim(npxPath, 'npx');
+
+    return { nodePath, npxPath };
   }
 
   async startServer(port?: number): Promise<string> {
     return new Promise((resolve, reject) => {
-      // Get npx path first (also validates Node.js is available)
+      // Get configured paths
+      let nodePath: string;
       let npxPath: string;
       try {
-        npxPath = this.getNpxPath();
+        const paths = this.getPaths();
+        nodePath = paths.nodePath;
+        npxPath = paths.npxPath;
       } catch (error) {
         reject(error);
         return;
@@ -48,23 +130,54 @@ export class ServerManager {
 
       let stderrOutput = '';
 
-      // Build environment with optional PORT
+      // Get the directory containing node
+      const nodeDir = path.dirname(nodePath);
+      const homeDir = os.homedir();
+
+      // Build environment with all necessary variables
+      // GUI apps on macOS don't inherit shell environment, so we must set everything
       const env: NodeJS.ProcessEnv = {
+        // Start with current env
         ...process.env,
+        // Ensure node directory is in PATH so npx can find node
+        PATH: `${nodeDir}:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`,
+        HOME: homeDir,
+        USER: os.userInfo().username,
+        SHELL: '/bin/zsh',
+        TMPDIR: os.tmpdir(),
+        // npm/npx need these for cache and config
+        npm_config_cache: path.join(homeDir, '.npm'),
+        XDG_CACHE_HOME: path.join(homeDir, '.cache'),
         // Disable auto-opening browser since we're handling that
         BROWSER: 'none',
+        // Ensure proper terminal for any interactive prompts
+        TERM: 'xterm-256color',
       };
+
+      // Detect proto shims and set up proto environment
+      // Proto shims need PROTO_HOME to locate actual binaries
+      const isProtoShim = nodePath.includes('.proto/shims') || npxPath.includes('.proto/shims');
+      if (isProtoShim) {
+        const protoHome = path.join(homeDir, '.proto');
+        env.PROTO_HOME = protoHome;
+        // Add proto shims to PATH so proto can find its tools
+        env.PATH = `${path.join(protoHome, 'shims')}:${env.PATH}`;
+      }
 
       if (port) {
         env.PORT = String(port);
       }
 
-      // Spawn npx with detached: false to keep it in our process group
-      // This ensures child processes are killed when we kill the parent
-      this.serverProcess = spawn(npxPath, ['vibe-kanban@latest'], {
+      // Spawn via shell to ensure proper environment setup
+      // GUI apps have minimal environment, shell helps set it up
+      const { shell, args } = this.getShellCommand();
+      const command = `"${npxPath}" vibe-kanban@latest`;
+
+      this.serverProcess = spawn(shell, [...args, command], {
         stdio: ['ignore', 'pipe', 'pipe'],
         detached: false,
         env,
+        cwd: homeDir,
       });
 
       this.serverProcess.stdout?.on('data', (data: Buffer) => {
@@ -112,6 +225,11 @@ export class ServerManager {
 
           // Provide better error messages for common issues
           let errorMessage = `Server exited with code ${code} before becoming ready`;
+
+          // Include stderr for debugging
+          if (stderrOutput) {
+            errorMessage += `\n\nError output:\n${stderrOutput.slice(0, 500)}`;
+          }
 
           if (stderrOutput.includes('AddrInUse') || stderrOutput.includes('Address already in use')) {
             errorMessage = 'Port is already in use.\n\nAnother instance of vibe-kanban may be running.\nPlease close it and try again.';

@@ -9,8 +9,10 @@ export class WindowManager {
   private mainWindow: BrowserWindow | null = null;
 
   createMainWindow(): BrowserWindow {
-    // Get icon path - works in both dev and production
-    const iconPath = path.join(app.getAppPath(), 'assets', 'icon.png');
+    // Get icon path - extraResource files are in Resources folder when packaged
+    const iconPath = app.isPackaged
+      ? path.join(process.resourcesPath, 'assets', 'icon.png')
+      : path.join(app.getAppPath(), 'assets', 'icon.png');
 
     this.mainWindow = new BrowserWindow({
       width: 1400,
@@ -40,9 +42,19 @@ export class WindowManager {
       return { action: 'deny' };
     });
 
-    this.mainWindow.once('ready-to-show', () => {
-      this.mainWindow?.show();
-    });
+    // Show window when ready, with fallback timeout
+    let shown = false;
+    const showWindow = () => {
+      if (!shown && this.mainWindow && !this.mainWindow.isDestroyed()) {
+        shown = true;
+        this.mainWindow.show();
+      }
+    };
+
+    this.mainWindow.once('ready-to-show', showWindow);
+
+    // Fallback: show window after 3 seconds even if ready-to-show doesn't fire
+    setTimeout(showWindow, 3000);
 
     return this.mainWindow;
   }

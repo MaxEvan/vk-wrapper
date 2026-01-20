@@ -25,38 +25,19 @@
 
     .container {
       text-align: center;
-      max-width: 400px;
+      max-width: 450px;
       width: 100%;
       padding: 20px;
     }
 
     .app-icon {
-      width: 150px;
-      height: 150px;
+      width: 120px;
+      height: 120px;
       margin-bottom: 16px;
     }
 
-    h1 {
-      font-size: 2.5rem;
-      font-weight: 600;
-      margin-bottom: 30px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-
-    /* Config screen styles */
-    .config-screen {
-      display: block;
-    }
-
-    .config-screen.hidden {
-      display: none;
-    }
-
     .form-group {
-      margin-bottom: 20px;
+      margin-bottom: 16px;
       text-align: left;
     }
 
@@ -67,10 +48,11 @@
       font-size: 14px;
     }
 
-    input[type="number"] {
+    input[type="number"],
+    input[type="text"] {
       width: 100%;
       padding: 12px 16px;
-      font-size: 16px;
+      font-size: 14px;
       border: 2px solid rgba(102, 126, 234, 0.3);
       border-radius: 8px;
       background: rgba(255, 255, 255, 0.05);
@@ -79,11 +61,15 @@
       transition: border-color 0.2s;
     }
 
-    input[type="number"]:focus {
+    input[type="text"] {
+      font-family: monospace;
+    }
+
+    input:focus {
       border-color: #667eea;
     }
 
-    input[type="number"]::placeholder {
+    input::placeholder {
       color: #666;
     }
 
@@ -91,6 +77,15 @@
       font-size: 12px;
       color: #666;
       margin-top: 6px;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .input-row input {
+      flex: 1;
     }
 
     button {
@@ -122,13 +117,52 @@
       box-shadow: none;
     }
 
-    /* Loading screen styles */
+    .btn-secondary {
+      width: auto;
+      padding: 12px 16px;
+      font-size: 14px;
+      font-weight: 500;
+      border: 2px solid rgba(102, 126, 234, 0.5);
+      background: transparent;
+      color: #667eea;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(102, 126, 234, 0.1);
+      border-color: #667eea;
+      box-shadow: none;
+      transform: none;
+    }
+
+    /* Screen visibility */
+    .setup-screen,
+    .config-screen,
     .loading-screen {
       display: none;
     }
 
+    .setup-screen.visible,
+    .config-screen.visible,
     .loading-screen.visible {
       display: block;
+    }
+
+    .section-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #ccc;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    .status {
+      color: #888;
+      font-size: 14px;
+      margin-top: 12px;
+    }
+
+    .status.error {
+      color: #ff6b6b;
     }
 
     .spinner {
@@ -146,17 +180,38 @@
         transform: rotate(360deg);
       }
     }
-
-    .status {
-      color: #888;
-      font-size: 14px;
-    }
   </style>
 </head>
 
 <body>
   <div class="container">
     <img src="./assets/icon.png" alt="VK Wrapper" class="app-icon" />
+
+    <!-- Setup Screen -->
+    <div id="setup-screen" class="setup-screen">
+      <p class="section-title">Node.js Setup</p>
+
+      <div class="form-group">
+        <label for="node-path">Path to node</label>
+        <div class="input-row">
+          <input type="text" id="node-path" placeholder="/usr/local/bin/node" />
+          <button id="browse-node-btn" class="btn-secondary" type="button">Browse</button>
+        </div>
+        <p class="hint">Find with: which node</p>
+      </div>
+
+      <div class="form-group">
+        <label for="npx-path">Path to npx</label>
+        <div class="input-row">
+          <input type="text" id="npx-path" placeholder="/usr/local/bin/npx" />
+          <button id="browse-npx-btn" class="btn-secondary" type="button">Browse</button>
+        </div>
+        <p class="hint">Find with: which npx</p>
+      </div>
+
+      <p id="setup-status" class="status"></p>
+      <button id="save-paths-btn" type="button">Continue</button>
+    </div>
 
     <!-- Config Screen -->
     <div id="config-screen" class="config-screen">

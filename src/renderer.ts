@@ -1,17 +1,82 @@
+// avoid linting errors
+export { };
+
 // Type declaration for the exposed API
 declare global {
   interface Window {
     electronAPI: {
       launchServer: (port?: number) => Promise<void>;
+      getPaths: () => Promise<{ nodePath: string | null; npxPath: string | null }>;
+      setPaths: (nodePath: string, npxPath: string) => Promise<void>;
+      browseForNode: () => Promise<string | null>;
+      browseForNpx: () => Promise<string | null>;
     };
   }
 }
 
 // DOM elements
+const setupScreen = document.getElementById('setup-screen') as HTMLDivElement;
 const configScreen = document.getElementById('config-screen') as HTMLDivElement;
 const loadingScreen = document.getElementById('loading-screen') as HTMLDivElement;
+
+const nodePathInput = document.getElementById('node-path') as HTMLInputElement;
+const npxPathInput = document.getElementById('npx-path') as HTMLInputElement;
+const browseNodeBtn = document.getElementById('browse-node-btn') as HTMLButtonElement;
+const browseNpxBtn = document.getElementById('browse-npx-btn') as HTMLButtonElement;
+const savePathsBtn = document.getElementById('save-paths-btn') as HTMLButtonElement;
+const setupStatus = document.getElementById('setup-status') as HTMLParagraphElement;
+
 const portInput = document.getElementById('port') as HTMLInputElement;
 const launchBtn = document.getElementById('launch-btn') as HTMLButtonElement;
+
+// Check if paths are configured on startup
+async function checkConfig() {
+  const paths = await window.electronAPI.getPaths();
+
+  if (paths.nodePath && paths.npxPath) {
+    // Already configured, show main config screen
+    setupScreen.classList.remove('visible');
+    configScreen.classList.add('visible');
+  } else {
+    // Need user to configure
+    setupScreen.classList.add('visible');
+    configScreen.classList.remove('visible');
+  }
+}
+
+// Browse for node
+browseNodeBtn.addEventListener('click', async () => {
+  const selected = await window.electronAPI.browseForNode();
+  if (selected) {
+    nodePathInput.value = selected;
+    setupStatus.textContent = '';
+  }
+});
+
+// Browse for npx
+browseNpxBtn.addEventListener('click', async () => {
+  const selected = await window.electronAPI.browseForNpx();
+  if (selected) {
+    npxPathInput.value = selected;
+    setupStatus.textContent = '';
+  }
+});
+
+// Save paths
+savePathsBtn.addEventListener('click', async () => {
+  const nodePath = nodePathInput.value.trim();
+  const npxPath = npxPathInput.value.trim();
+
+  if (!nodePath || !npxPath) {
+    setupStatus.textContent = 'Please provide both node and npx paths.';
+    setupStatus.className = 'status error';
+    return;
+  }
+
+  await window.electronAPI.setPaths(nodePath, npxPath);
+  setupScreen.classList.remove('visible');
+  configScreen.classList.add('visible');
+});
 
 // Handle launch button click
 launchBtn.addEventListener('click', async () => {
@@ -25,7 +90,7 @@ launchBtn.addEventListener('click', async () => {
   }
 
   // Switch to loading screen
-  configScreen.classList.add('hidden');
+  configScreen.classList.remove('visible');
   loadingScreen.classList.add('visible');
   launchBtn.disabled = true;
 
@@ -44,3 +109,12 @@ portInput.addEventListener('keydown', (e) => {
     launchBtn.click();
   }
 });
+
+npxPathInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    savePathsBtn.click();
+  }
+});
+
+// Initialize
+checkConfig();

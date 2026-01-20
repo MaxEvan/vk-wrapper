@@ -15,6 +15,7 @@ const config: ForgeConfig = {
     executableName: 'vk-wrapper',
     appBundleId: 'com.vkwrapper.desktop',
     icon: './assets/icon',
+    extraResource: ['./assets'],
   },
   rebuildConfig: {},
   makers: [
