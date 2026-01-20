@@ -78,7 +78,7 @@ const config: ForgeConfig = {
         name: 'vk-wrapper',
       },
       prerelease: false,
-      draft: true,
+      draft: false,
     }),
   ],
 };

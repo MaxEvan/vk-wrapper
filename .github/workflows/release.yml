@@ -23,14 +23,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Build for Apple Silicon
-        run: pnpm make --arch=arm64
+      - name: Build and publish for Apple Silicon
+        run: pnpm run publish -- --arch=arm64
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build for Intel
-        run: pnpm make --arch=x64
-
-      - name: Publish to GitHub
-        run: pnpm run publish
+      - name: Build and publish for Intel
+        run: pnpm run publish -- --arch=x64
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -51,10 +50,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Build
-        run: pnpm make
-
-      - name: Publish to GitHub
+      - name: Build and publish
         run: pnpm run publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -79,10 +75,7 @@ jobs:
       - name: Install Linux build dependencies
         run: sudo apt-get update && sudo apt-get install -y rpm
 
-      - name: Build
-        run: pnpm make
-
-      - name: Publish to GitHub
+      - name: Build and publish
         run: pnpm run publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
