@@ -8,11 +8,78 @@ export class ServerManager {
   private serverProcess: ChildProcess | null = null;
   private serverUrl: string | null = null;
   private configManager: ConfigManager;
+  private cachedShellEnv: NodeJS.ProcessEnv | null = null;
   private readonly URL_REGEX = /https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0):\d+/;
   private readonly STARTUP_TIMEOUT = 60000; // 60 seconds (first run may need to download)
 
   constructor(configManager: ConfigManager) {
     this.configManager = configManager;
+  }
+
+  /**
+   * Capture the user's shell environment by spawning a login shell.
+   * GUI apps on macOS don't inherit the terminal environment, so we need to
+   * explicitly load the user's shell configuration to get their PATH, etc.
+   */
+  private async getShellEnvironment(): Promise<NodeJS.ProcessEnv> {
+    // Return cached environment if available
+    if (this.cachedShellEnv) {
+      return this.cachedShellEnv;
+    }
+
+    return new Promise((resolve) => {
+      // Use the user's preferred shell, or fall back to common shells
+      const shell = process.env.SHELL || '/bin/zsh';
+
+      // -i: interactive (sources .bashrc/.zshrc)
+      // -l: login shell (sources .profile, .bash_profile, .zprofile)
+      // -c: run command
+      const child = spawn(shell, ['-ilc', 'env'], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+
+      let stdout = '';
+      const timeout = setTimeout(() => {
+        child.kill();
+        console.log('Shell environment capture timed out, using process.env');
+        resolve(process.env);
+      }, 5000);
+
+      child.stdout?.on('data', (data: Buffer) => {
+        stdout += data.toString();
+      });
+
+      child.on('error', (err) => {
+        clearTimeout(timeout);
+        console.log(`Failed to get shell environment: ${err.message}, using process.env`);
+        resolve(process.env);
+      });
+
+      child.on('close', (code) => {
+        clearTimeout(timeout);
+
+        if (code !== 0) {
+          console.log(`Shell exited with code ${code}, using process.env`);
+          resolve(process.env);
+          return;
+        }
+
+        const env: NodeJS.ProcessEnv = {};
+        for (const line of stdout.split('\n')) {
+          const idx = line.indexOf('=');
+          if (idx > 0) {
+            const key = line.slice(0, idx);
+            const value = line.slice(idx + 1);
+            env[key] = value;
+          }
+        }
+
+        // Cache the result for future calls
+        this.cachedShellEnv = env;
+        console.log('Successfully captured shell environment');
+        resolve(env);
+      });
+    });
   }
 
   isRunning(): boolean {
@@ -110,19 +177,26 @@ export class ServerManager {
   }
 
   async startServer(port?: number): Promise<string> {
-    return new Promise((resolve, reject) => {
-      // Get configured paths
-      let nodePath: string;
-      let npxPath: string;
-      try {
-        const paths = this.getPaths();
-        nodePath = paths.nodePath;
-        npxPath = paths.npxPath;
-      } catch (error) {
-        reject(error);
-        return;
-      }
+    // Get configured paths
+    const { nodePath, npxPath } = this.getPaths();
+    const nodeDir = path.dirname(nodePath);
+    const homeDir = os.homedir();
 
+    // Get the user's shell environment (includes their PATH, version managers, etc.)
+    const shellEnv = await this.getShellEnvironment();
+
+    // Build environment by extending the user's shell environment
+    const env: NodeJS.ProcessEnv = {
+      ...shellEnv,
+      // Prepend node directory to PATH so npx can find the configured node
+      PATH: `${nodeDir}:${shellEnv.PATH || '/usr/local/bin:/usr/bin:/bin'}`,
+      // Disable auto-opening browser since we're handling that
+      BROWSER: 'none',
+      // Set port if specified
+      ...(port ? { PORT: String(port) } : {}),
+    };
+
+    return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         this.killServer();
         reject(new Error('Server startup timeout. Please check your internet connection and try again.'));
@@ -130,46 +204,7 @@ export class ServerManager {
 
       let stderrOutput = '';
 
-      // Get the directory containing node
-      const nodeDir = path.dirname(nodePath);
-      const homeDir = os.homedir();
-
-      // Build environment with all necessary variables
-      // GUI apps on macOS don't inherit shell environment, so we must set everything
-      const env: NodeJS.ProcessEnv = {
-        // Start with current env
-        ...process.env,
-        // Ensure node directory is in PATH so npx can find node
-        PATH: `${nodeDir}:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`,
-        HOME: homeDir,
-        USER: os.userInfo().username,
-        SHELL: '/bin/zsh',
-        TMPDIR: os.tmpdir(),
-        // npm/npx need these for cache and config
-        npm_config_cache: path.join(homeDir, '.npm'),
-        XDG_CACHE_HOME: path.join(homeDir, '.cache'),
-        // Disable auto-opening browser since we're handling that
-        BROWSER: 'none',
-        // Ensure proper terminal for any interactive prompts
-        TERM: 'xterm-256color',
-      };
-
-      // Detect proto shims and set up proto environment
-      // Proto shims need PROTO_HOME to locate actual binaries
-      const isProtoShim = nodePath.includes('.proto/shims') || npxPath.includes('.proto/shims');
-      if (isProtoShim) {
-        const protoHome = path.join(homeDir, '.proto');
-        env.PROTO_HOME = protoHome;
-        // Add proto shims to PATH so proto can find its tools
-        env.PATH = `${path.join(protoHome, 'shims')}:${env.PATH}`;
-      }
-
-      if (port) {
-        env.PORT = String(port);
-      }
-
       // Spawn via shell to ensure proper environment setup
-      // GUI apps have minimal environment, shell helps set it up
       const { shell, args } = this.getShellCommand();
       const command = `"${npxPath}" vibe-kanban@latest`;
 
